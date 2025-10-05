@@ -1,12 +1,14 @@
 #include "array.cpp"
 #include <iostream>
 #include <limits>
+#include <vector>
 using namespace std;
 
 // Function declarations
 int calculateCompatibility(const Job& job, const Resume& resume);
 int calculateJobTitleMatchScore(const string& jobTitle, const Job& job);
 void findJobsByJobTitle(const string& jobTitle, const Array<Job>& jobStorage, int maxResults = 10000);
+void findJobsByTitleAndSkills(const string& jobTitle, const string& technicalSkillsCSV, const Array<Job>& jobStorage, int maxResults = 10000);
 
 // Function to calculate compatibility score between job and resume
 int calculateCompatibility(const Job& job, const Resume& resume) {
@@ -152,6 +154,105 @@ void findJobsByJobTitle(const string& jobTitle, const Array<Job>& jobStorage, in
     delete[] matches;
 }
 
+// Find and display jobs that match BOTH the provided job title and ALL provided technical skills
+void findJobsByTitleAndSkills(const string& jobTitle, const string& technicalSkillsCSV, const Array<Job>& jobStorage, int maxResults) {
+    struct Match { int index; int score; };
+    int total = jobStorage.getSize();
+    if (total == 0) {
+        cout << "No jobs available to search." << endl;
+        return;
+    }
+
+    // Prepare list of skills (lowercased, trimmed) from CSV
+    vector<string> skillsList;
+    {
+        string skills = technicalSkillsCSV;
+        transform(skills.begin(), skills.end(), skills.begin(), ::tolower);
+        istringstream iss(skills);
+        string token;
+        while (getline(iss, token, ',')) {
+            // Trim whitespace
+            token.erase(0, token.find_first_not_of(" \t"));
+            if (!token.empty()) token.erase(token.find_last_not_of(" \t") + 1);
+            // Remove trailing punctuation
+            while (!token.empty() && (token.back() == '.' || token.back() == ';' || token.back() == ':')) {
+                token.pop_back();
+            }
+            if (!token.empty()) skillsList.push_back(token);
+        }
+    }
+
+    if (skillsList.empty()) {
+        cout << "No valid technical skills provided to filter by." << endl;
+        return;
+    }
+
+    Match* matches = new Match[total];
+    int count = 0;
+
+    for (int i = 0; i < total; i++) {
+        Job job = jobStorage.getItem(i);
+
+        // Title relevance
+        int titleScore = calculateJobTitleMatchScore(jobTitle, job);
+        if (titleScore == 0) continue; // must match title at least weakly
+
+        // Check ALL provided skills appear in job.skills (case-insensitive substring)
+        string jobSkills = job.getSkills();
+        transform(jobSkills.begin(), jobSkills.end(), jobSkills.begin(), ::tolower);
+
+        bool allSkillsPresent = true;
+        for (const string& s : skillsList) {
+            if (jobSkills.find(s) == string::npos) {
+                allSkillsPresent = false;
+                break;
+            }
+        }
+        if (!allSkillsPresent) continue; // enforce AND condition
+
+        // Rank: prioritize titleScore, then small bonus per matched skill
+        int score = titleScore + static_cast<int>(skillsList.size()) * 5;
+
+        matches[count].index = i;
+        matches[count].score = score;
+        count++;
+    }
+
+    // Sort matches by score descending
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = 0; j < count - i - 1; j++) {
+            if (matches[j].score < matches[j + 1].score) {
+                Match tmp = matches[j];
+                matches[j] = matches[j + 1];
+                matches[j + 1] = tmp;
+            }
+        }
+    }
+
+    if (count == 0) {
+        cout << "No jobs matched the given title and technical skills." << endl;
+        delete[] matches;
+        return;
+    }
+
+    int displayCount = count < maxResults ? count : maxResults;
+    cout << "\n=== Top " << displayCount << " Jobs by Title AND Skills Match ===" << endl;
+
+    for (int i = 0; i < displayCount; i++) {
+        Job job = jobStorage.getItem(matches[i].index);
+        cout << "\nJob " << (i + 1) << " (Combined Score: " << matches[i].score << "):" << endl;
+        cout << "ID: " << matches[i].index << endl;
+        cout << "Title: " << job.title << endl;
+        cout << "Skills: " << job.skills << endl;
+        cout << "Description: " << job.description.substr(0, 120) << "..." << endl;
+        cout << "----------------------------------------" << endl;
+    }
+
+    cout << "\nFound " << count << " total jobs matching title AND skills." << endl;
+
+    delete[] matches;
+}
+
 
 int main() {
     Array<Job> jobStorage(100);
@@ -188,9 +289,9 @@ int main() {
     do {
         cout << "\n-----------------------------------------\n";
         cout << "Choose an action:\n";
-        cout << "1. Search Jobs by Skills\n";
-        cout << "2. Search Employees by Skills\n";
-        cout << "3. Filter Jobs with Specific Job\n";
+        cout << "1. Search Jobs with Skills\n";
+        cout << "2. Search Candidates with Skills\n";
+        cout << "3. Filter Jobs with Specific Skills\n";
         cout << "4. Show Best Matches for Each Job\n";
         cout << "5. Exit\n";
         cout << "-----------------------------------------\n";
@@ -234,8 +335,8 @@ int main() {
             }
 
             case 3: {
-                cout << "\n=== Filter Resumes by Job Title (Title-only search) ===" << endl;
-                cout << "Enter the job title to match candidates for:" << endl;
+                cout << "\n=== Filter Jobs by Title AND Technical Skills ===" << endl;
+                cout << "Enter the job title:" << endl;
                 cout << "- Example: Software Engineer, Data Analyst" << endl;
                 cout << "Job Title: ";
                 getline(cin, keyword);
@@ -245,12 +346,25 @@ int main() {
                     break;
                 }
 
-                cout << "\nSearching for jobs with title matching: '" << keyword << "' (ignoring skills)...\n";
+                string skillsInput;
+                cout << "Enter technical skills (comma-separated):" << endl;
+                cout << "- Example: Python, SQL, Docker" << endl;
+                cout << "Technical Skills: ";
+                getline(cin, skillsInput);
 
-                int maxResults = 10000; // Show all matches
+                // Filter to known technical skills
+                {
+                    Job helper;
+                    string filteredSkills = helper.filterTechnicalSkills(skillsInput);
+                    if (filteredSkills == "Not specified") {
+                        cout << "\nNo technical skills detected in input. Please enter technical skills like 'Python, SQL, Docker'.\n";
+                        break;
+                    }
 
-                // Find matching jobs by title only
-                findJobsByJobTitle(keyword, jobStorage, maxResults);
+                    cout << "\nSearching for jobs with title '" << keyword << "' AND skills: " << filteredSkills << "...\n";
+                    int maxResults = 10000; // Show all matches
+                    findJobsByTitleAndSkills(keyword, filteredSkills, jobStorage, maxResults);
+                }
                 break;
             }
 
