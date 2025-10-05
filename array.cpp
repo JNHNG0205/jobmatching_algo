@@ -78,8 +78,6 @@ public:
     // Core Functions
     bool insert(const T& item);        // insert data item
     bool remove(int index);            // remove at index
-    int search(const string& keyword) const; // return index of first match
-    void display() const;              // display all stored items
 
     // Getters
     int getSize() const { return size; }
@@ -90,7 +88,6 @@ public:
     bool loadFromCSV(const string& filename);
     
     // Rule-based matching functions
-    int findBestMatch(const string& keyword) const;
     void displayMatches(const string& keyword, int maxResults = 5) const;
 };
 
@@ -394,33 +391,7 @@ bool Array<T>::remove(int index) {
     return true;
 }
 
-// Search for keyword (returns first match index or -1)
-template<typename T>
-int Array<T>::search(const string& keyword) const {
-    string normKey = normalizeText(keyword);
-
-    for (int i = 0; i < size; i++) {
-        string normItem = normalizeText(dataArray[i].getText());
-        if (normItem.find(normKey) != string::npos) {
-            return i; // return index of first match
-        }
-    }
-    return -1;
-}
-
-// Display all items
-template<typename T>
-void Array<T>::display() const {
-    if (size == 0) {
-        cout << "[Empty Storage]" << endl;
-        return;
-    }
-
-    for (int i = 0; i < size; i++) {
-        cout << "[" << i << "] ";
-        dataArray[i].display();
-    }
-}
+// (search removed as unused)
 
 // Get item at specific index
 template<typename T>
@@ -456,46 +427,6 @@ bool Array<T>::loadFromCSV(const string& filename) {
 
     file.close();
     return true;
-}
-
-// Rule-based matching: find best match based on skills similarity
-template<typename T>
-int Array<T>::findBestMatch(const string& keyword) const {
-    string normKey = normalizeText(keyword);
-    int bestMatch = -1;
-    int bestScore = 0;
-
-    for (int i = 0; i < size; i++) {
-        int score = 0;
-        
-        // Check skills match
-        string normSkills = normalizeText(dataArray[i].getSkills());
-        if (normSkills.find(normKey) != string::npos) {
-            score += 10; // High score for skills match
-        }
-        
-        // Check description match
-        string normDesc = normalizeText(dataArray[i].getText());
-        if (normDesc.find(normKey) != string::npos) {
-            score += 5; // Medium score for description match
-        }
-        
-        // Count skill overlaps (for multi-word keywords)
-        istringstream iss(normKey);
-        string word;
-        while (iss >> word) {
-            if (normSkills.find(word) != string::npos) {
-                score += 2;
-            }
-        }
-        
-        if (score > bestScore) {
-            bestScore = score;
-            bestMatch = i;
-        }
-    }
-    
-    return bestMatch;
 }
 
 // Display multiple matches with scores
