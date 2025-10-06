@@ -1,6 +1,8 @@
 #include "array.cpp"
 #include <iostream>
 #include <limits>
+#include <chrono>
+#include <iomanip>
 using namespace std;
 
 // Function declarations
@@ -255,16 +257,55 @@ int main() {
 
             case 4: {
                 cout << "\n=== Best Matches for Each Job ===" << endl;
-                cout << "Analyzing compatibility between ALL jobs and resumes...\n";
-                cout << "This may take a moment for " << jobStorage.getSize() << " jobs...\n";
                 
-                int maxJobs = jobStorage.getSize(); // Show ALL jobs
+                // Submenu for selecting number of matches to display
+                int displayOption;
+                cout << "\nSelect number of top matches to display:\n";
+                cout << "1. Top 10 matches\n";
+                cout << "2. Top 50 matches\n";
+                cout << "3. Top 100 matches\n";
+                cout << "4. All matches\n";
+                cout << "Enter your choice (1-4): ";
+                cin >> displayOption;
+                
+                if (cin.fail() || displayOption < 1 || displayOption > 4) {
+                    cin.clear();
+                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    cout << "Invalid choice. Defaulting to Top 10 matches.\n";
+                    displayOption = 1;
+                }
+                
+                int maxJobsToShow;
+                switch(displayOption) {
+                    case 1: maxJobsToShow = 10; break;
+                    case 2: maxJobsToShow = 50; break;
+                    case 3: maxJobsToShow = 100; break;
+                    case 4: maxJobsToShow = jobStorage.getSize(); break;
+                    default: maxJobsToShow = 10;
+                }
+                
+                maxJobsToShow = min(maxJobsToShow, jobStorage.getSize());
+                
+                cout << "\nAnalyzing compatibility between jobs and resumes...\n";
+                cout << "This may take a moment for " << maxJobsToShow << " jobs...\n";
+                
+                // Start timing
+                auto startTime = chrono::high_resolution_clock::now();
+                
                 int maxResumes = min(100, resumeStorage.getSize()); // Use more resumes for better matching
                 
-                cout << "\nJob-Resume Matches for All " << maxJobs << " Jobs:\n";
-                cout << "==========================================\n";
+                // Create array to store all job matches with scores
+                struct JobMatch {
+                    int jobIndex;
+                    int resumeIndex;
+                    int score;
+                };
                 
-                for (int i = 0; i < maxJobs; i++) {
+                JobMatch* allMatches = new JobMatch[jobStorage.getSize()];
+                int matchCount = 0;
+                
+                // Calculate best match for each job
+                for (int i = 0; i < jobStorage.getSize(); i++) {
                     Job currentJob = jobStorage.getItem(i);
                     int bestMatch = -1;
                     int bestScore = 0;
@@ -280,21 +321,55 @@ int main() {
                     }
                     
                     if (bestMatch != -1 && bestScore > 0) {
-                        cout << "\nJob " << (i + 1) << " (ID: " << i << ") - Best Match (Score: " << bestScore << "):" << endl;
-                        cout << "Job: " << currentJob.title << endl;
-                        cout << "Skills: " << currentJob.skills << endl;
-                        cout << "Best Resume Match: ID " << bestMatch << endl;
-                        cout << "Resume Skills: " << resumeStorage.getItem(bestMatch).skills << endl;
-                        cout << "----------------------------------------" << endl;
+                        allMatches[matchCount].jobIndex = i;
+                        allMatches[matchCount].resumeIndex = bestMatch;
+                        allMatches[matchCount].score = bestScore;
+                        matchCount++;
                     }
                     
                     // Show progress every 1000 jobs
                     if ((i + 1) % 1000 == 0) {
-                        cout << "\n[Progress: " << (i + 1) << "/" << maxJobs << " jobs processed]" << endl;
+                        cout << "[Progress: " << (i + 1) << "/" << jobStorage.getSize() << " jobs processed]\n";
                     }
                 }
                 
-                cout << "\nCompleted analysis of all " << maxJobs << " jobs!" << endl;
+                // Sort matches by score (descending)
+                for (int i = 0; i < matchCount - 1; i++) {
+                    for (int j = i + 1; j < matchCount; j++) {
+                        if (allMatches[j].score > allMatches[i].score) {
+                            JobMatch temp = allMatches[i];
+                            allMatches[i] = allMatches[j];
+                            allMatches[j] = temp;
+                        }
+                    }
+                }
+                
+                // Display top matches
+                cout << "\n=== Top " << min(maxJobsToShow, matchCount) << " Job-Resume Matches ===\n";
+                cout << "==========================================\n";
+                
+                for (int i = 0; i < min(maxJobsToShow, matchCount); i++) {
+                    Job currentJob = jobStorage.getItem(allMatches[i].jobIndex);
+                    Resume currentResume = resumeStorage.getItem(allMatches[i].resumeIndex);
+                    
+                    cout << "\nRank #" << (i + 1) << " - Score: " << allMatches[i].score << endl;
+                    cout << "Job ID: " << allMatches[i].jobIndex << " - " << currentJob.title << endl;
+                    cout << "Job Skills: " << currentJob.skills << endl;
+                    cout << "Resume ID: " << allMatches[i].resumeIndex << endl;
+                    cout << "Resume Skills: " << currentResume.skills << endl;
+                    cout << "----------------------------------------" << endl;
+                }
+                
+                // End timing
+                auto endTime = chrono::high_resolution_clock::now();
+                auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
+                
+                cout << "\nCompleted analysis! Processed " << jobStorage.getSize() << " jobs, found " << matchCount << " matches." << endl;
+                cout << "Displayed top " << min(maxJobsToShow, matchCount) << " matches." << endl;
+                cout << "Processing time: " << duration.count() << " ms (" 
+                     << fixed << setprecision(2) << duration.count() / 1000.0 << " seconds)" << endl;
+                
+                delete[] allMatches;
                 break;
             }
 
