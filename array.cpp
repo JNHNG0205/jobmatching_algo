@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <vector>
 using namespace std;
 
 // Forward declarations
@@ -24,6 +25,7 @@ public:
 
 // Job structure
 struct Job : public DataItem {
+    int id;
     string title;
     string description;
     string skills;
@@ -32,17 +34,19 @@ struct Job : public DataItem {
     string experience_level;
     
     Job() = default;
-    Job(const string& desc);
+    Job(const string& csvLine);
     
     string getText() const override { return description; }
     string getSkills() const override { return skills; }
     void display() const override;
+    void parseFromCSV(const string& csvLine);
     void parseFromDescription(const string& desc);
     string filterTechnicalSkills(const string& rawSkills);
 };
 
 // Resume structure
 struct Resume : public DataItem {
+    int id;
     string name;
     string summary;
     string skills;
@@ -51,11 +55,12 @@ struct Resume : public DataItem {
     string contact;
     
     Resume() = default;
-    Resume(const string& desc);
+    Resume(const string& csvLine);
     
     string getText() const override { return summary; }
     string getSkills() const override { return skills; }
     void display() const override;
+    void parseFromCSV(const string& csvLine);
     void parseFromDescription(const string& desc);
     string filterTechnicalSkills(const string& rawSkills);
 };
@@ -94,10 +99,71 @@ public:
 #endif
 
 // Job implementation
-Job::Job(const string& desc) {
-    parseFromDescription(desc);
+Job::Job(const string& csvLine) {
+    parseFromCSV(csvLine);
 }
 
+void Job::parseFromCSV(const string& csvLine) {
+    // Parse CSV line: Job_ID,Title,Skills
+    istringstream iss(csvLine);
+    string field;
+    vector<string> fields;
+    
+    // Split by comma, handling quoted fields
+    bool inQuotes = false;
+    string currentField = "";
+    
+    for (char c : csvLine) {
+        if (c == '"') {
+            inQuotes = !inQuotes;
+        } else if (c == ',' && !inQuotes) {
+            fields.push_back(currentField);
+            currentField = "";
+        } else {
+            currentField += c;
+        }
+    }
+    fields.push_back(currentField); // Add the last field
+    
+    if (fields.size() >= 3) {
+        // Job_ID
+        string idStr = fields[0];
+        if (!idStr.empty() && idStr.front() == '"' && idStr.back() == '"') {
+            idStr = idStr.substr(1, idStr.length() - 2);
+        }
+        try { id = stoi(idStr); } catch (...) { id = -1; }
+
+        title = fields[1];
+        skills = fields[2];
+        
+        // Clean up title (remove quotes if present)
+        if (title.front() == '"' && title.back() == '"') {
+            title = title.substr(1, title.length() - 2);
+        }
+        
+        // Clean up skills (remove quotes if present)
+        if (skills.front() == '"' && skills.back() == '"') {
+            skills = skills.substr(1, skills.length() - 2);
+        }
+        
+        // Set default values for other fields
+        description = "Job: " + title + " requiring " + skills;
+        company = "Company Not Specified";
+        location = "Location Not Specified";
+        experience_level = "Not Specified";
+    } else {
+        // Fallback for malformed data
+        id = -1;
+        title = "Unknown Position";
+        skills = "Not specified";
+        description = csvLine;
+        company = "Company Not Specified";
+        location = "Location Not Specified";
+        experience_level = "Not Specified";
+    }
+}
+
+// Keep the old method for backward compatibility
 void Job::parseFromDescription(const string& desc) {
     description = desc;
     
@@ -203,20 +269,73 @@ string Job::filterTechnicalSkills(const string& rawSkills) {
 }
 
 void Job::display() const {
+    cout << "Job Description: " << title << " needed with experience in " << skills << "." << endl;
     cout << "Title: " << title << endl;
     cout << "Skills: " << skills << endl;
-    cout << "Company: " << company << endl;
-    cout << "Location: " << location << endl;
-    cout << "Experience Level: " << experience_level << endl;
-    cout << "Description: " << description.substr(0, 100) << "..." << endl;
     cout << "----------------------------------------" << endl;
 }
 
 // Resume implementation
-Resume::Resume(const string& desc) {
-    parseFromDescription(desc);
+Resume::Resume(const string& csvLine) {
+    parseFromCSV(csvLine);
 }
 
+void Resume::parseFromCSV(const string& csvLine) {
+    // Parse CSV line: Resume_ID,Skills
+    istringstream iss(csvLine);
+    string field;
+    vector<string> fields;
+    
+    // Split by comma, handling quoted fields
+    bool inQuotes = false;
+    string currentField = "";
+    
+    for (char c : csvLine) {
+        if (c == '"') {
+            inQuotes = !inQuotes;
+        } else if (c == ',' && !inQuotes) {
+            fields.push_back(currentField);
+            currentField = "";
+        } else {
+            currentField += c;
+        }
+    }
+    fields.push_back(currentField); // Add the last field
+    
+    if (fields.size() >= 2) {
+        // Resume_ID
+        string idStr = fields[0];
+        if (!idStr.empty() && idStr.front() == '"' && idStr.back() == '"') {
+            idStr = idStr.substr(1, idStr.length() - 2);
+        }
+        try { id = stoi(idStr); } catch (...) { id = -1; }
+
+        skills = fields[1];
+        
+        // Clean up skills (remove quotes if present)
+        if (skills.front() == '"' && skills.back() == '"') {
+            skills = skills.substr(1, skills.length() - 2);
+        }
+        
+        // Set default values for other fields
+        summary = "Professional with skills in " + skills;
+        name = "Professional";
+        experience = "Experienced";
+        education = "Not Specified";
+        contact = "Not Provided";
+    } else {
+        // Fallback for malformed data
+        id = -1;
+        skills = "Not specified";
+        summary = csvLine;
+        name = "Professional";
+        experience = "Experienced";
+        education = "Not Specified";
+        contact = "Not Provided";
+    }
+}
+
+// Keep the old method for backward compatibility
 void Resume::parseFromDescription(const string& desc) {
     summary = desc;
     
@@ -312,11 +431,8 @@ string Resume::filterTechnicalSkills(const string& rawSkills) {
 }
 
 void Resume::display() const {
+    cout << "Details: " << "Experienced professional skilled in " << skills << "." << endl;
     cout << "Skills: " << skills << endl;
-    cout << "Experience: " << experience << endl;
-    cout << "Education: " << education << endl;
-    cout << "Contact: " << contact << endl;
-    cout << "Summary: " << summary.substr(0, 100) << "..." << endl;
     cout << "----------------------------------------" << endl;
 }
 

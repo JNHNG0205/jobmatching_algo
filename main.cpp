@@ -32,12 +32,7 @@ int calculateCompatibility(const Job& job, const Resume& resume) {
         }
     }
     
-    // Bonus for exact job title match in resume
-    string jobTitle = job.title;
-    transform(jobTitle.begin(), jobTitle.end(), jobTitle.begin(), ::tolower);
-    if (resume.getText().find(jobTitle) != string::npos) {
-        score += 10; // Bonus for title match
-    }
+    // Note: resumes don't include job titles; no title-based bonus
     
     return score;
 }
@@ -258,26 +253,26 @@ int main() {
                     break;
                 }
                 
-                // Parse the entered job description
-                Job userJob(keyword);
-                    // Try to extract technical skills using the Job helper. If none are found,
-                    // fall back to showing the raw input so the user can still search by their
-                    // full description. Also display both filtered and raw for transparency.
-                    string rawSkills = keyword;
-                    string filteredSkills = userJob.filterTechnicalSkills(rawSkills);
-                    if (filteredSkills != "Not specified") {
-                        userJob.skills = filteredSkills;
-                    } else {
-                        // If filtering didn't find anything, use the raw text so we "show all"
-                        userJob.skills = rawSkills;
-                    }
+                Job userJob;
+                // If the user follows the expected format, parse directly.
+                if (keyword.find("needed with experience in") != string::npos) {
+                    userJob.parseFromDescription(keyword);
+                } else {
+                    // Graceful fallback: treat input as title and ask for skills
+                    cout << "\nNote: Expected format is '<Title> needed with experience in <skill1, skill2, ...>.'" << endl;
+                    cout << "You entered only a title. Please enter required skills (comma-separated): ";
+                    string skillsLine;
+                    getline(cin, skillsLine);
 
-                    cout << "\nParsed Job Details:" << endl;
-                    cout << "Title: " << userJob.title << endl;
-                    cout << "Required Skills (filtered): " << (filteredSkills.empty() ? "Not specified" : filteredSkills) << endl;
-                    if (filteredSkills == "Not specified") {
-                        cout << "Required Skills (raw): " << rawSkills << endl;
-                    }
+                    // Assign parsed values
+                    userJob.title = keyword;
+                    string filtered = userJob.filterTechnicalSkills(skillsLine);
+                    userJob.skills = (filtered != "Not specified" ? filtered : skillsLine);
+                }
+
+                cout << "\nParsed Job Details:" << endl;
+                cout << "Title: " << userJob.title << endl;
+                cout << "Required Skills (filtered): " << (userJob.skills.empty() ? "Not specified" : userJob.skills) << endl;
                 cout << "\nSearching for matching candidates...\n";
                 
                 int maxResults = 10000; // Show all matches
@@ -324,84 +319,65 @@ int main() {
                 // Start timing
                 auto startTime = chrono::high_resolution_clock::now();
                 
-                int maxResumes = min(100, resumeStorage.getSize()); // Use more resumes for better matching
+                int maxResumes = resumeStorage.getSize(); // Scan all resumes for accuracy
                 
-                // Create array to store all job matches with scores
-                struct JobMatch {
-                    int jobIndex;
-                    int resumeIndex;
-                    int score;
-                };
-                
-                JobMatch* allMatches = new JobMatch[jobStorage.getSize()];
-                int matchCount = 0;
-                
-                // Calculate best match for each job
-                for (int i = 0; i < jobStorage.getSize(); i++) {
+                // Display top matches per job without storing all combinations
+                cout << "\n=== Top " << maxJobsToShow << " Job-Resume Matches ===\n";
+                cout << "==========================================\n";
+
+                for (int i = 0; i < maxJobsToShow; i++) {
                     Job currentJob = jobStorage.getItem(i);
-                    int bestMatch = -1;
+
+                    // First pass: determine best score for this job
                     int bestScore = 0;
-                    
-                    // Find best matching resume for this job
                     for (int j = 0; j < maxResumes; j++) {
                         Resume currentResume = resumeStorage.getItem(j);
                         int score = calculateCompatibility(currentJob, currentResume);
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestMatch = j;
-                        }
+                        if (score > bestScore) bestScore = score;
                     }
-                    
-                    if (bestMatch != -1 && bestScore > 0) {
-                        allMatches[matchCount].jobIndex = i;
-                        allMatches[matchCount].resumeIndex = bestMatch;
-                        allMatches[matchCount].score = bestScore;
-                        matchCount++;
+
+                    if (bestScore == 0) {
+                        cout << "\nJob ID: " << currentJob.id << endl;
+                        cout << "Job Title: " << currentJob.title << endl;
+                        cout << "Job Skills: " << currentJob.skills << endl;
+                        cout << "No matching resumes found." << endl;
+                        cout << "----------------------------------------" << endl;
+                        continue;
                     }
-                    
-                    // Show progress every 1000 jobs
-                    if ((i + 1) % 1000 == 0) {
-                        cout << "[Progress: " << (i + 1) << "/" << jobStorage.getSize() << " jobs processed]\n";
-                    }
-                }
-                
-                // Sort matches by score (descending)
-                for (int i = 0; i < matchCount - 1; i++) {
-                    for (int j = i + 1; j < matchCount; j++) {
-                        if (allMatches[j].score > allMatches[i].score) {
-                            JobMatch temp = allMatches[i];
-                            allMatches[i] = allMatches[j];
-                            allMatches[j] = temp;
-                        }
-                    }
-                }
-                
-                // Display top matches
-                cout << "\n=== Top " << min(maxJobsToShow, matchCount) << " Job-Resume Matches ===\n";
-                cout << "==========================================\n";
-                
-                for (int i = 0; i < min(maxJobsToShow, matchCount); i++) {
-                    Job currentJob = jobStorage.getItem(allMatches[i].jobIndex);
-                    Resume currentResume = resumeStorage.getItem(allMatches[i].resumeIndex);
-                    
-                    cout << "\nRank #" << (i + 1) << " - Score: " << allMatches[i].score << endl;
-                    cout << "Job ID: " << allMatches[i].jobIndex << " - " << currentJob.title << endl;
+
+                    // Second pass: collect and print all resume IDs that tie with bestScore
+                    cout << "\nJob ID: " << currentJob.id << endl;
+                    cout << "Job Title: " << currentJob.title << endl;
                     cout << "Job Skills: " << currentJob.skills << endl;
-                    cout << "Resume ID: " << allMatches[i].resumeIndex << endl;
-                    cout << "Resume Skills: " << currentResume.skills << endl;
+                    string resumeIds = "";
+                    bool firstId = true;
+                    for (int j = 0; j < maxResumes; j++) {
+                        Resume currentResume = resumeStorage.getItem(j);
+                        int score = calculateCompatibility(currentJob, currentResume);
+                        if (score == bestScore) {
+                            if (!firstId) resumeIds += ", ";
+                            resumeIds += to_string(currentResume.id);
+                            firstId = false;
+                        }
+                    }
+                    cout << "Resume ID: " << resumeIds << endl;
                     cout << "----------------------------------------" << endl;
+
+                    // Progress every 1000 jobs
+                    if ((i + 1) % 1000 == 0) {
+                        cout << "[Progress: " << (i + 1) << "/" << maxJobsToShow << " jobs displayed]\n";
+                    }
                 }
-                
+
                 // End timing
                 auto endTime = chrono::high_resolution_clock::now();
                 auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
                 
-                cout << "\nCompleted analysis! Processed " << jobStorage.getSize() << " jobs, found " << matchCount << " matches." << endl;
-                cout << "Displayed top " << min(maxJobsToShow, matchCount) << " matches." << endl;
+                cout << "\nCompleted analysis! Processed " << maxJobsToShow << " jobs." << endl;
                 cout << "Processing time: " << duration.count() << " ms (" 
                      << fixed << setprecision(2) << duration.count() / 1000.0 << " seconds)" << endl;
                 
-                delete[] allMatches;
+                // No dynamic arrays to free
                 break;
             }
 
