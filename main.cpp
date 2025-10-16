@@ -9,6 +9,7 @@ using namespace std;
 int calculateCompatibility(const Job& job, const Resume& resume);
 void findCandidatesForJob(const Job& job, const Array<Resume>& resumeStorage, int maxResults = 10);
 int countWords(const string& text);
+bool runDataCleaning();
 
 // Function to calculate compatibility score between job and resume
 int calculateCompatibility(const Job& job, const Resume& resume) {
@@ -152,6 +153,36 @@ int countWords(const string& text) {
     return count;
 }
 
+// Function to run data cleaning process
+bool runDataCleaning() {
+    cout << "\nStarting data cleaning process..." << endl;
+    
+    // Check if data_cleaning executable exists
+    ifstream check("data_cleaning");
+    if (!check.good()) {
+        check.close();
+        // Try with .exe extension (for Windows)
+        check.open("data_cleaning.exe");
+        if (!check.good()) {
+            cerr << "Error: data_cleaning executable not found!" << endl;
+            cerr << "Please ensure data_cleaning is compiled and in the current directory." << endl;
+            return false;
+        }
+    }
+    check.close();
+    
+    // Run the data cleaning process
+    cout << "Running data cleaning..." << endl;
+    int result = system("data_cleaning");
+    if (result == 0) {
+        cout << "Data cleaning completed successfully!" << endl;
+        return true;
+    } else {
+        cerr << "Data cleaning failed with exit code: " << result << endl;
+        return false;
+    }
+}
+
 int main() {
     Array<Job> jobStorage(100);
     Array<Resume> resumeStorage(100);
@@ -162,8 +193,8 @@ int main() {
     cout << "=========================================\n";
 
     // ===== Step 1: Auto-load datasets =====
-    string jobPath = "./data/job_description.csv";
-    string resumePath = "./data/resume.csv";
+    string jobPath = "./data/job_description_clean.csv";
+    string resumePath = "./data/resume_clean.csv";
 
     cout << "\nLoading job and resume datasets...\n";
 
@@ -191,7 +222,8 @@ int main() {
         cout << "2. Search Resumes by Skills\n";
         cout << "3. Filter Resumes with Specific Job\n";
         cout << "4. Show Best Matches for Each Job\n";
-        cout << "5. Exit\n";
+        cout << "5. Clean Data (Regenerate Cleaned CSVs)\n";
+        cout << "6. Exit\n";
         cout << "-----------------------------------------\n";
         cout << "Enter choice: ";
         cin >> choice;
@@ -373,7 +405,28 @@ int main() {
                 break;
             }
 
-            case 5:
+            case 5: {
+                cout << "\n=== Data Cleaning ===" << endl;
+                cout << "This will regenerate the cleaned CSV files from the original data." << endl;
+                cout << "Continue? (y/n): ";
+                char confirm;
+                cin >> confirm;
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                
+                if (confirm == 'y' || confirm == 'Y') {
+                    if (runDataCleaning()) {
+                        cout << "\nData cleaning completed successfully!" << endl;
+                        cout << "Please restart the program to load the updated cleaned data." << endl;
+                    } else {
+                        cout << "\nData cleaning failed. Check error messages above." << endl;
+                    }
+                } else {
+                    cout << "Data cleaning cancelled." << endl;
+                }
+                break;
+            }
+
+            case 6:
                 cout << "\nExiting program...\n";
                 break;
 
@@ -381,7 +434,7 @@ int main() {
                 cout << "Invalid choice. Please enter a valid option.\n";
         }
 
-    } while (choice != 5);
+    } while (choice != 6);
 
     return 0;
 }
