@@ -8,11 +8,19 @@
 #include <cctype>
 #include <sstream>
 #include <vector>
+#include <map>
+#include <set>
+#include <iterator>
+#include <chrono>
+#include <iomanip>
 using namespace std;
 
 // Forward declarations
 struct Job;
 struct Resume;
+
+// Function declarations
+int calculateCompatibility(const Job& job, const Resume& resume);
 
 // Base class for data items
 class DataItem {
@@ -65,6 +73,12 @@ struct Resume : public DataItem {
     string filterTechnicalSkills(const string& rawSkills);
 };
 
+// Match struct for storing search results
+struct Match {
+    int index;
+    int score;
+};
+
 // Generic Array template for storing data items
 template<typename T>
 class Array {
@@ -73,6 +87,12 @@ private:
     int capacity;       // maximum allocated slots
     int size;           // current number of items
     void resize();      // private helper to increase capacity
+    
+    // Inverted Index for fast searching
+    map<string, set<int>> skillIndex;      // skill -> set of document IDs
+    map<string, set<int>> titleIndex;      // title words -> set of document IDs
+    map<string, set<int>> descriptionIndex; // description words -> set of document IDs
+    bool indexBuilt;    // flag to track if index is built
     string normalizeText(const string& text) const;
 
 public:
@@ -94,9 +114,104 @@ public:
     
     // Rule-based matching functions
     void displayMatches(const string& keyword, int maxResults = 5) const;
+    
+    // Sorting and optimization functions
+    void quickSort(Match* matches, int low, int high) const;
+    int partition(Match* matches, int low, int high) const;
+    void getTopKMatches(Match* matches, int matchCount, int k, Match* topK) const;
+    
+    // Inverted Index functions
+    void buildIndex();
+    void addToIndex(const string& text, int docId, map<string, set<int>>& index);
+    set<int> searchIndex(const string& keyword, const map<string, set<int>>& index) const;
+    set<int> booleanSearch(const string& query) const;
+    vector<string> tokenize(const string& text) const;
+    
+    // Optimized job-resume matching functions
+    void findBestMatchesForJobs(const Array<Resume>& resumeStorage, int maxJobsToShow) const;
+    set<int> findCandidateResumes(const string& jobSkills) const;
+    
+    // Job title search function
+    void displayMatchesByTitle(const string& titleKeyword, int maxResults) const;
 };
 
 #endif
+
+// Template specializations for buildIndex
+template<>
+void Array<Job>::buildIndex() {
+    if (indexBuilt) return; // Index already built
+    
+    // Clear existing indexes
+    skillIndex.clear();
+    titleIndex.clear();
+    descriptionIndex.clear();
+    
+    // Build indexes for each document
+    for (int i = 0; i < size; i++) {
+        // Index skills - split by comma first to handle multi-word skills as phrases
+        string skills = dataArray[i].getSkills();
+        istringstream skillStream(skills);
+        string skill;
+        while (getline(skillStream, skill, ',')) {
+            // Trim whitespace
+            skill.erase(0, skill.find_first_not_of(" \t"));
+            skill.erase(skill.find_last_not_of(" \t") + 1);
+            if (!skill.empty()) {
+                string normSkill = normalizeText(skill);
+                // Add the entire skill phrase as a single token
+                skillIndex[normSkill].insert(i);
+            }
+        }
+        
+        // Index title (for jobs) - use the title field directly
+        string title = dataArray[i].title;
+        title = normalizeText(title);
+        addToIndex(title, i, titleIndex);
+        
+        // Index full description
+        string description = normalizeText(dataArray[i].getText());
+        addToIndex(description, i, descriptionIndex);
+    }
+    
+    indexBuilt = true;
+    cout << "Inverted index built successfully!" << endl;
+}
+
+template<>
+void Array<Resume>::buildIndex() {
+    if (indexBuilt) return; // Index already built
+    
+    // Clear existing indexes
+    skillIndex.clear();
+    titleIndex.clear();
+    descriptionIndex.clear();
+    
+    // Build indexes for each document
+    for (int i = 0; i < size; i++) {
+        // Index skills - split by comma first to handle multi-word skills as phrases
+        string skills = dataArray[i].getSkills();
+        istringstream skillStream(skills);
+        string skill;
+        while (getline(skillStream, skill, ',')) {
+            // Trim whitespace
+            skill.erase(0, skill.find_first_not_of(" \t"));
+            skill.erase(skill.find_last_not_of(" \t") + 1);
+            if (!skill.empty()) {
+                string normSkill = normalizeText(skill);
+                // Add the entire skill phrase as a single token
+                skillIndex[normSkill].insert(i);
+            }
+        }
+        
+        // Index full description
+        string description = normalizeText(dataArray[i].getText());
+        addToIndex(description, i, descriptionIndex);
+    }
+    
+    indexBuilt = true;
+    cout << "Inverted index built successfully!" << endl;
+}
 
 // Job implementation
 Job::Job(const string& csvLine) {
@@ -442,6 +557,7 @@ Array<T>::Array(int initialCapacity) {
     capacity = initialCapacity;
     size = 0;
     dataArray = new T[capacity];
+    indexBuilt = false;
 }
 
 // Destructor
@@ -474,9 +590,9 @@ string Array<T>::normalizeText(const string& text) const {
     transform(normalized.begin(), normalized.end(), normalized.begin(),
               [](unsigned char c){ return tolower(c); });
 
-    // Remove punctuation (optional but helps matching)
+    // Remove punctuation but keep spaces for tokenization
     normalized.erase(remove_if(normalized.begin(), normalized.end(),
-              [](unsigned char c){ return ispunct(c); }), normalized.end());
+              [](unsigned char c){ return ispunct(c) && c != ' '; }), normalized.end());
 
     // Trim leading/trailing spaces
     size_t start = normalized.find_first_not_of(" \t\n\r");
@@ -542,72 +658,166 @@ bool Array<T>::loadFromCSV(const string& filename) {
     }
 
     file.close();
+    
+    // Build inverted index after loading data
+    if (size > 0) {
+        buildIndex();
+    }
+    
     return true;
 }
 
-// Display multiple matches with scores
+// Quick Sort implementation for sorting matches by score (descending order)
+template<typename T>
+void Array<T>::quickSort(Match* matches, int low, int high) const {
+    if (low < high) {
+        int pivotIndex = partition(matches, low, high);
+        quickSort(matches, low, pivotIndex - 1);
+        quickSort(matches, pivotIndex + 1, high);
+    }
+}
+
+// Partition function for Quick Sort
+template<typename T>
+int Array<T>::partition(Match* matches, int low, int high) const {
+    int pivot = matches[high].score;
+    int i = low - 1;
+    
+    for (int j = low; j < high; j++) {
+        // Sort in descending order (highest scores first)
+        if (matches[j].score >= pivot) {
+            i++;
+            swap(matches[i], matches[j]);
+        }
+    }
+    swap(matches[i + 1], matches[high]);
+    return i + 1;
+}
+
+// Top-K optimization: Get only the top K results without sorting entire array
+template<typename T>
+void Array<T>::getTopKMatches(Match* matches, int matchCount, int k, Match* topK) const {
+    if (k >= matchCount) {
+        // If k >= matchCount, just copy all matches
+        for (int i = 0; i < matchCount; i++) {
+            topK[i] = matches[i];
+        }
+        return;
+    }
+    
+    // Use partial sort to get top K elements
+    // This is more efficient than sorting the entire array
+    for (int i = 0; i < k; i++) {
+        int maxIndex = i;
+        for (int j = i + 1; j < matchCount; j++) {
+            if (matches[j].score > matches[maxIndex].score) {
+                maxIndex = j;
+            }
+        }
+        if (maxIndex != i) {
+            swap(matches[i], matches[maxIndex]);
+        }
+        topK[i] = matches[i];
+    }
+}
+
+// Display multiple matches with scores using Inverted Index
 template<typename T>
 void Array<T>::displayMatches(const string& keyword, int maxResults) const {
-    string normKey = normalizeText(keyword);
+    // Build index if not already built
+    if (!indexBuilt) {
+        cout << "Building inverted index for fast search..." << endl;
+        const_cast<Array<T>*>(this)->buildIndex();
+    }
     
-    // Create array to store scores and indices
-    struct Match {
-        int index;
-        int score;
-    };
+    // Use inverted index for fast search
+    set<int> candidateIds = booleanSearch(keyword);
     
-    Match* matches = new Match[size];
+    if (candidateIds.empty()) {
+        cout << "No matches found for '" << keyword << "'" << endl;
+        return;
+    }
+    
+    // Create array to store scores and indices for candidates only
+    Match* matches = new Match[candidateIds.size()];
     int matchCount = 0;
     
-    for (int i = 0; i < size; i++) {
+    // Only process candidates from inverted index (much faster!)
+    for (int docId : candidateIds) {
         int score = 0;
         
-        // Check skills match
-        string normSkills = normalizeText(dataArray[i].getSkills());
+        string normSkills = normalizeText(dataArray[docId].getSkills());
+        string normDesc = normalizeText(dataArray[docId].getText());
+        
+        // Handle comma-separated skills properly (check BEFORE normalizing)
+        if (keyword.find(',') != string::npos) {
+            // Parse comma-separated skills
+            vector<string> searchSkills;
+            istringstream iss(keyword);
+            string skill;
+            while (getline(iss, skill, ',')) {
+                // Trim whitespace
+                skill.erase(0, skill.find_first_not_of(" \t"));
+                skill.erase(skill.find_last_not_of(" \t") + 1);
+                if (!skill.empty()) {
+                    // Normalize each skill before searching
+                    searchSkills.push_back(normalizeText(skill));
+                }
+            }
+            
+            // Score based on individual skill matches
+            for (const string& searchSkill : searchSkills) {
+                if (normSkills.find(searchSkill) != string::npos) {
+                    score += 10; // Each matching skill adds 10 points
+                }
+                if (normDesc.find(searchSkill) != string::npos) {
+                    score += 5; // Each matching skill in description adds 5 points
+                }
+            }
+        } else {
+            // Single skill search
+            string normKey = normalizeText(keyword);
         if (normSkills.find(normKey) != string::npos) {
             score += 10;
         }
-        
-        // Check description match
-        string normDesc = normalizeText(dataArray[i].getText());
         if (normDesc.find(normKey) != string::npos) {
             score += 5;
         }
         
-        // Count skill overlaps
+            // Count word overlaps for single term
         istringstream iss(normKey);
         string word;
         while (iss >> word) {
             if (normSkills.find(word) != string::npos) {
                 score += 2;
+                }
             }
         }
         
         if (score > 0) {
-            matches[matchCount].index = i;
+            matches[matchCount].index = docId;
             matches[matchCount].score = score;
             matchCount++;
         }
     }
     
-    // Sort matches by score (simple bubble sort)
-    for (int i = 0; i < matchCount - 1; i++) {
-        for (int j = 0; j < matchCount - i - 1; j++) {
-            if (matches[j].score < matches[j + 1].score) {
-                Match temp = matches[j];
-                matches[j] = matches[j + 1];
-                matches[j + 1] = temp;
-            }
-        }
+    // Top-K optimization: Only get the top results we need to display
+    int resultsToShow = min(maxResults, matchCount);
+    Match* topMatches = new Match[resultsToShow];
+    
+    if (matchCount > 0) {
+        getTopKMatches(matches, matchCount, resultsToShow, topMatches);
     }
     
     // Display top matches
-    cout << "\n=== Top " << min(maxResults, matchCount) << " Matches for '" << keyword << "' ===" << endl;
-    for (int i = 0; i < min(maxResults, matchCount); i++) {
-        cout << "\nMatch " << (i + 1) << " (Score: " << matches[i].score << "):" << endl;
-        cout << "ID: " << matches[i].index << endl;
-        dataArray[matches[i].index].display();
+    cout << "\n=== Top " << resultsToShow << " Matches for '" << keyword << "' ===" << endl;
+    for (int i = 0; i < resultsToShow; i++) {
+        cout << "\nMatch " << (i + 1) << " (Score: " << topMatches[i].score << "):" << endl;
+        cout << "ID: " << topMatches[i].index << endl;
+        dataArray[topMatches[i].index].display();
     }
+    
+    delete[] topMatches;
     
     if (matchCount == 0) {
         cout << "No matches found for '" << keyword << "'" << endl;
@@ -615,6 +825,381 @@ void Array<T>::displayMatches(const string& keyword, int maxResults) const {
     
     delete[] matches;
 }
+
+
+// Add text to inverted index
+template<typename T>
+void Array<T>::addToIndex(const string& text, int docId, map<string, set<int>>& index) {
+    vector<string> tokens = tokenize(text);
+    for (const string& token : tokens) {
+        if (token.length() > 1) { // Skip single characters
+            index[token].insert(docId);
+        }
+    }
+}
+
+// Search in a specific index
+template<typename T>
+set<int> Array<T>::searchIndex(const string& keyword, const map<string, set<int>>& index) const {
+    string normKey = normalizeText(keyword);
+    
+    // For skill index, treat the keyword as a phrase (don't tokenize)
+    if (&index == &skillIndex) {
+        auto it = index.find(normKey);
+        if (it != index.end()) {
+            return it->second;
+        }
+        return set<int>();
+    }
+    
+    // For other indexes, tokenize and do AND search
+    vector<string> tokens = tokenize(normKey);
+    
+    set<int> result;
+    for (const string& token : tokens) {
+        auto it = index.find(token);
+        if (it != index.end()) {
+            if (result.empty()) {
+                result = it->second; // First token
+            } else {
+                // Intersection for AND operation
+                set<int> intersection;
+                set_intersection(result.begin(), result.end(),
+                               it->second.begin(), it->second.end(),
+                               inserter(intersection, intersection.begin()));
+                result = intersection;
+            }
+        } else {
+            return set<int>(); // No matches if any token not found
+        }
+    }
+    return result;
+}
+
+// Boolean search with AND/OR operations
+template<typename T>
+set<int> Array<T>::booleanSearch(const string& query) const {
+    if (!indexBuilt) {
+        cout << "Index not built! Building now..." << endl;
+        const_cast<Array<T>*>(this)->buildIndex();
+    }
+    
+    // Check for comma-separated skills BEFORE normalizing (comma will be removed by normalize)
+    if (query.find(',') != string::npos) {
+        vector<string> skills;
+        istringstream iss(query);
+        string skill;
+        while (getline(iss, skill, ',')) {
+            // Trim whitespace
+            skill.erase(0, skill.find_first_not_of(" \t"));
+            skill.erase(skill.find_last_not_of(" \t") + 1);
+            if (!skill.empty()) {
+                skills.push_back(skill);
+            }
+        }
+        
+        if (skills.empty()) {
+            return set<int>();
+        }
+        
+        // Start with first skill
+        set<int> result = searchIndex(skills[0], skillIndex);
+        
+        // Union with remaining skills (OR operation)
+        for (size_t i = 1; i < skills.size(); i++) {
+            set<int> skillResults = searchIndex(skills[i], skillIndex);
+            result.insert(skillResults.begin(), skillResults.end());
+        }
+        
+        return result;
+    }
+    
+    string normQuery = normalizeText(query);
+    
+    // Check for OR operation
+    if (normQuery.find(" or ") != string::npos) {
+        vector<string> orTerms;
+        istringstream iss(normQuery);
+        string term;
+        while (getline(iss, term, '|')) {
+            if (term.find(" or ") != string::npos) {
+                size_t pos = term.find(" or ");
+                orTerms.push_back(term.substr(0, pos));
+                orTerms.push_back(term.substr(pos + 4));
+            } else {
+                orTerms.push_back(term);
+            }
+        }
+        
+        set<int> result;
+        for (const string& term : orTerms) {
+            set<int> termResults = searchIndex(term, skillIndex);
+            result.insert(termResults.begin(), termResults.end());
+        }
+        return result;
+    }
+    
+    // Default AND search for single term
+    return searchIndex(normQuery, skillIndex);
+}
+
+// Tokenize text into words
+template<typename T>
+vector<string> Array<T>::tokenize(const string& text) const {
+    vector<string> tokens;
+    istringstream iss(text);
+    string word;
+    
+    while (iss >> word) {
+        // Remove punctuation
+        word.erase(remove_if(word.begin(), word.end(), ::ispunct), word.end());
+        if (!word.empty()) {
+            transform(word.begin(), word.end(), word.begin(), ::tolower);
+            tokens.push_back(word);
+        }
+    }
+    
+    return tokens;
+}
+
+// Find candidate resumes using inverted index for a given job skills string
+// This function is only available for Job arrays
+template<>
+set<int> Array<Job>::findCandidateResumes(const string& jobSkills) const {
+    if (!indexBuilt) {
+        cout << "Index not built! Building now..." << endl;
+        const_cast<Array<Job>*>(this)->buildIndex();
+    }
+    
+    // Use boolean search to find resumes that match the job skills
+    return booleanSearch(jobSkills);
+}
+
+// Optimized function to find best matches for each job using all advanced algorithms
+// This function is only available for Job arrays
+template<>
+void Array<Job>::findBestMatchesForJobs(const Array<Resume>& resumeStorage, int maxJobsToShow) const {
+    if (!indexBuilt) {
+        cout << "Building inverted index for optimized matching..." << endl;
+        const_cast<Array<Job>*>(this)->buildIndex();
+    }
+    
+    cout << "\n=== Optimized Job-Resume Matching ===" << endl;
+    cout << "Using: Inverted Index + Boolean Search + Quick Sort + Top-K" << endl;
+    cout << "Processing " << min(maxJobsToShow, size) << " jobs..." << endl;
+    cout << "==========================================\n";
+    
+    // Start timing
+    auto startTime = chrono::high_resolution_clock::now();
+    
+    int processedJobs = 0;
+    
+    for (int i = 0; i < min(maxJobsToShow, size); i++) {
+        Job currentJob = dataArray[i];
+        
+        // Step 1: Use inverted index to find candidate resumes (O(1) lookup)
+        set<int> candidateResumeIds = findCandidateResumes(currentJob.skills);
+        
+        if (candidateResumeIds.empty()) {
+            cout << "\nJob ID: " << currentJob.id << endl;
+            cout << "Job Title: " << currentJob.title << endl;
+            cout << "Job Skills: " << currentJob.skills << endl;
+            cout << "No matching resumes found." << endl;
+            cout << "----------------------------------------" << endl;
+            continue;
+        }
+        
+        // Step 2: Calculate compatibility scores only for candidates (not all resumes!)
+        struct JobResumeMatch {
+            int resumeId;
+            int score;
+        };
+        
+        JobResumeMatch* matches = new JobResumeMatch[candidateResumeIds.size()];
+        int matchCount = 0;
+        
+        for (int resumeId : candidateResumeIds) {
+            // resumeId is the document ID from the index, which corresponds to the array index
+            Resume candidateResume = resumeStorage.getItem(resumeId);
+            int score = calculateCompatibility(currentJob, candidateResume);
+            
+            if (score > 0) {
+                matches[matchCount].resumeId = resumeId;
+                matches[matchCount].score = score;
+                matchCount++;
+            }
+        }
+        
+        if (matchCount == 0) {
+            cout << "\nJob ID: " << currentJob.id << endl;
+            cout << "Job Title: " << currentJob.title << endl;
+            cout << "Job Skills: " << currentJob.skills << endl;
+            cout << "No matching resumes found." << endl;
+            cout << "----------------------------------------" << endl;
+            delete[] matches;
+            continue;
+        }
+        
+        // Step 3: Use Quick Sort to sort matches by score (O(n log n))
+        if (matchCount > 1) {
+            // Custom quick sort for JobResumeMatch
+    for (int i = 0; i < matchCount - 1; i++) {
+        for (int j = 0; j < matchCount - i - 1; j++) {
+            if (matches[j].score < matches[j + 1].score) {
+                        JobResumeMatch temp = matches[j];
+                matches[j] = matches[j + 1];
+                matches[j + 1] = temp;
+                    }
+                }
+            }
+        }
+        
+        // Step 4: Find best score and collect all resumes that tie
+        int bestScore = matches[0].score;
+        string resumeIds = "";
+        bool firstId = true;
+        
+        for (int j = 0; j < matchCount; j++) {
+            if (matches[j].score == bestScore) {
+                if (!firstId) resumeIds += ", ";
+                resumeIds += to_string(matches[j].resumeId);
+                firstId = false;
+            } else {
+                break; // Since sorted, no more matches with best score
+            }
+        }
+        
+        // Display results
+        cout << "\nJob ID: " << currentJob.id << endl;
+        cout << "Job Title: " << currentJob.title << endl;
+        cout << "Job Skills: " << currentJob.skills << endl;
+        cout << "Resume ID: " << resumeIds << endl;
+        cout << "Best Score: " << bestScore << endl;
+        cout << "Candidates Found: " << matchCount << " (from " << candidateResumeIds.size() << " candidates)" << endl;
+        cout << "----------------------------------------" << endl;
+        
+        delete[] matches;
+        processedJobs++;
+        
+        // Progress indicator
+        if (processedJobs % 100 == 0) {
+            cout << "[Progress: " << processedJobs << "/" << min(maxJobsToShow, size) << " jobs processed]" << endl;
+        }
+    }
+    
+    // End timing
+    auto endTime = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
+    double durationSeconds = duration.count() / 1000.0;
+    double avgTimePerJobMs = (processedJobs > 0 ? duration.count() / processedJobs : 0);
+    double avgTimePerJobSeconds = (processedJobs > 0 ? durationSeconds / processedJobs : 0);
+    
+    cout << "\n=== Optimization Results ===" << endl;
+    cout << "Processed " << processedJobs << " jobs in " << duration.count() << " ms (" << fixed << setprecision(3) << durationSeconds << " seconds)" << endl;
+    cout << "Average time per job: " << fixed << setprecision(1) << avgTimePerJobMs << " ms (" << fixed << setprecision(3) << avgTimePerJobSeconds << " seconds)" << endl;
+    cout << "Performance: " << fixed << setprecision(2) << (processedJobs / durationSeconds) << " jobs/second" << endl;
+}
+
+// External compatibility function (needs to be accessible)
+int calculateCompatibility(const Job& job, const Resume& resume) {
+    int score = 0;
+    
+    // Normalize skills for comparison
+    string jobSkills = job.getSkills();
+    string resumeSkills = resume.getSkills();
+    
+    // Convert to lowercase for comparison
+    transform(jobSkills.begin(), jobSkills.end(), jobSkills.begin(), ::tolower);
+    transform(resumeSkills.begin(), resumeSkills.end(), resumeSkills.begin(), ::tolower);
+    
+    // Count matching skills
+    istringstream jobStream(jobSkills);
+    string skill;
+    while (jobStream >> skill) {
+        if (resumeSkills.find(skill) != string::npos) {
+            score += 5; // Each matching skill adds 5 points
+        }
+    }
+    
+    return score;
+}
+
+// Search jobs by title (only for Job objects)
+template<>
+void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResults) const {
+    // Build index if not already built
+    if (!indexBuilt) {
+        cout << "Building inverted index for fast search..." << endl;
+        const_cast<Array<Job>*>(this)->buildIndex();
+    }
+    
+    // Use title index for fast search
+    set<int> candidateIds = searchIndex(titleKeyword, titleIndex);
+    
+    if (candidateIds.empty()) {
+        cout << "No jobs found with title containing '" << titleKeyword << "'" << endl;
+        return;
+    }
+    
+    // Create array to store scores and indices for candidates only
+    Match* matches = new Match[candidateIds.size()];
+    int matchCount = 0;
+    
+    string normTitle = normalizeText(titleKeyword);
+    
+    // Only process candidates from inverted index (much faster!)
+    for (int docId : candidateIds) {
+        int score = 0;
+        
+        string normJobTitle = normalizeText(dataArray[docId].title);
+        string normDesc = normalizeText(dataArray[docId].getText());
+        
+        // Score based on title match
+        if (normJobTitle.find(normTitle) != string::npos) {
+            score += 20; // High score for title match
+        }
+        if (normDesc.find(normTitle) != string::npos) {
+            score += 10; // Lower score for description match
+        }
+        
+        // Count word overlaps for better matching
+        istringstream iss(normTitle);
+        string word;
+        while (iss >> word) {
+            if (normJobTitle.find(word) != string::npos) {
+                score += 5; // Bonus for each word match in title
+            }
+            if (normDesc.find(word) != string::npos) {
+                score += 2; // Small bonus for word match in description
+            }
+        }
+        
+        if (score > 0) {
+            matches[matchCount].index = docId;
+            matches[matchCount].score = score;
+            matchCount++;
+        }
+    }
+    
+    // Top-K optimization: Only get the top results we need to display
+    int resultsToShow = min(maxResults, matchCount);
+    Match* topResults = new Match[resultsToShow];
+    getTopKMatches(matches, matchCount, resultsToShow, topResults);
+    
+    // Display results
+    cout << "\n=== Top " << resultsToShow << " Job Title Matches for '" << titleKeyword << "' ===" << endl;
+    cout << endl;
+    
+    for (int i = 0; i < resultsToShow; i++) {
+        cout << "Match " << (i + 1) << " (Score: " << topResults[i].score << "):" << endl;
+        dataArray[topResults[i].index].display();
+    }
+    
+    // Clean up
+    delete[] matches;
+    delete[] topResults;
+}
+
 
 // Explicit template instantiations
 template class Array<Job>;
