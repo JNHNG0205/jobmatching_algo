@@ -7,13 +7,86 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-#include <vector>
 #include <map>
 #include <set>
 #include <iterator>
 #include <chrono>
 #include <iomanip>
 using namespace std;
+
+// Custom Dynamic Array class to replace vector
+template<typename T>
+class DynamicArray {
+private:
+    T* data;
+    int capacity;
+    int currentSize;
+    
+    void resize() {
+        int newCapacity = capacity * 2;
+        T* newData = new T[newCapacity];
+        
+        for (int i = 0; i < currentSize; i++) {
+            newData[i] = data[i];
+        }
+        
+        delete[] data;
+        data = newData;
+        capacity = newCapacity;
+    }
+    
+public:
+    DynamicArray(int initialCapacity = 10) : capacity(initialCapacity), currentSize(0) {
+        data = new T[capacity];
+    }
+    
+    ~DynamicArray() {
+        delete[] data;
+    }
+    
+    void push_back(const T& item) {
+        if (currentSize >= capacity) {
+            resize();
+        }
+        data[currentSize++] = item;
+    }
+    
+    T& operator[](int index) {
+        return data[index];
+    }
+    
+    const T& operator[](int index) const {
+        return data[index];
+    }
+    
+    int size() const {
+        return currentSize;
+    }
+    
+    bool empty() const {
+        return currentSize == 0;
+    }
+    
+    void clear() {
+        currentSize = 0;
+    }
+    
+    T* begin() {
+        return data;
+    }
+    
+    T* end() {
+        return data + currentSize;
+    }
+    
+    const T* begin() const {
+        return data;
+    }
+    
+    const T* end() const {
+        return data + currentSize;
+    }
+};
 
 // Forward declarations
 struct Job;
@@ -125,7 +198,7 @@ public:
     void addToIndex(const string& text, int docId, map<string, set<int>>& index);
     set<int> searchIndex(const string& keyword, const map<string, set<int>>& index) const;
     set<int> booleanSearch(const string& query) const;
-    vector<string> tokenize(const string& text) const;
+    DynamicArray<string> tokenize(const string& text) const;
     
     // Optimized job-resume matching functions
     void findBestMatchesForJobs(const Array<Resume>& resumeStorage, int maxJobsToShow) const;
@@ -222,7 +295,7 @@ void Job::parseFromCSV(const string& csvLine) {
     // Parse CSV line: Job_ID,Title,Skills
     istringstream iss(csvLine);
     string field;
-    vector<string> fields;
+    DynamicArray<string> fields;
     
     // Split by comma, handling quoted fields
     bool inQuotes = false;
@@ -399,7 +472,7 @@ void Resume::parseFromCSV(const string& csvLine) {
     // Parse CSV line: Resume_ID,Skills
     istringstream iss(csvLine);
     string field;
-    vector<string> fields;
+    DynamicArray<string> fields;
     
     // Split by comma, handling quoted fields
     bool inQuotes = false;
@@ -752,7 +825,7 @@ void Array<T>::displayMatches(const string& keyword, int maxResults) const {
         // Handle comma-separated skills properly (check BEFORE normalizing)
         if (keyword.find(',') != string::npos) {
             // Parse comma-separated skills
-            vector<string> searchSkills;
+            DynamicArray<string> searchSkills;
             istringstream iss(keyword);
             string skill;
             while (getline(iss, skill, ',')) {
@@ -830,7 +903,7 @@ void Array<T>::displayMatches(const string& keyword, int maxResults) const {
 // Add text to inverted index
 template<typename T>
 void Array<T>::addToIndex(const string& text, int docId, map<string, set<int>>& index) {
-    vector<string> tokens = tokenize(text);
+    DynamicArray<string> tokens = tokenize(text);
     for (const string& token : tokens) {
         if (token.length() > 1) { // Skip single characters
             index[token].insert(docId);
@@ -853,7 +926,7 @@ set<int> Array<T>::searchIndex(const string& keyword, const map<string, set<int>
     }
     
     // For other indexes, tokenize and do AND search
-    vector<string> tokens = tokenize(normKey);
+    DynamicArray<string> tokens = tokenize(normKey);
     
     set<int> result;
     for (const string& token : tokens) {
@@ -886,7 +959,7 @@ set<int> Array<T>::booleanSearch(const string& query) const {
     
     // Check for comma-separated skills BEFORE normalizing (comma will be removed by normalize)
     if (query.find(',') != string::npos) {
-        vector<string> skills;
+        DynamicArray<string> skills;
         istringstream iss(query);
         string skill;
         while (getline(iss, skill, ',')) {
@@ -906,7 +979,7 @@ set<int> Array<T>::booleanSearch(const string& query) const {
         set<int> result = searchIndex(skills[0], skillIndex);
         
         // Union with remaining skills (OR operation)
-        for (size_t i = 1; i < skills.size(); i++) {
+        for (int i = 1; i < skills.size(); i++) {
             set<int> skillResults = searchIndex(skills[i], skillIndex);
             result.insert(skillResults.begin(), skillResults.end());
         }
@@ -918,7 +991,7 @@ set<int> Array<T>::booleanSearch(const string& query) const {
     
     // Check for OR operation
     if (normQuery.find(" or ") != string::npos) {
-        vector<string> orTerms;
+        DynamicArray<string> orTerms;
         istringstream iss(normQuery);
         string term;
         while (getline(iss, term, '|')) {
@@ -945,8 +1018,8 @@ set<int> Array<T>::booleanSearch(const string& query) const {
 
 // Tokenize text into words
 template<typename T>
-vector<string> Array<T>::tokenize(const string& text) const {
-    vector<string> tokens;
+DynamicArray<string> Array<T>::tokenize(const string& text) const {
+    DynamicArray<string> tokens;
     istringstream iss(text);
     string word;
     
