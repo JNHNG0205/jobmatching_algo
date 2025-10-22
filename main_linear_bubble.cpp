@@ -109,7 +109,7 @@ int main() {
 
         switch (choice) {
             case 1: {
-                cout << "\nEnter job title to search for: ";
+                cout << "\nEnter job title to search for (Eg.: 'Software Engineer'): ";
                 getline(cin, keyword);
                 
                 // Submenu for selecting number of results to display
@@ -142,7 +142,7 @@ int main() {
             }
 
             case 2: {
-                cout << "\nEnter skills to search in Jobs: ";
+                cout << "\nEnter skills to search in Jobs (Eg.: 'Python, Java, C++'): ";
                 getline(cin, keyword);
                 
                 // Submenu for selecting number of results to display
@@ -175,7 +175,7 @@ int main() {
             }
 
             case 3: {
-                cout << "\nEnter skills to search in Resumes: ";
+                cout << "\nEnter skills to search in Resumes (Eg.: 'Python, Java, C++'): ";
                 getline(cin, keyword);
                 
                 // Submenu for selecting number of results to display
