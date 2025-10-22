@@ -1,4 +1,4 @@
-#include "array.cpp"
+#include "array_boolean_selection.cpp"
 #include <iostream>
 #include <limits>
 #include <chrono>
@@ -8,7 +8,6 @@ using namespace std;
 // Function declarations
 int countWords(const string& text);
 bool runDataCleaning();
-
 
 // Helper function to count words in a string
 int countWords(const string& text) {
@@ -56,8 +55,9 @@ int main() {
     Array<Resume> resumeStorage(100);
 
     cout << "=========================================\n";
-    cout << "   Job Matching System (Rule-Based)\n";
-    cout << "   Using Custom Array Data Structures\n";
+    cout << "   Job Matching System\n";
+    cout << "   Algorithm: BOOLEAN SEARCH + SELECTION SORT\n";
+    cout << "   Using Inverted Index + Custom Arrays\n";
     cout << "=========================================\n";
 
     // ===== Step 1: Auto-load datasets =====
@@ -228,7 +228,7 @@ int main() {
                 
                 maxJobsToShow = min(maxJobsToShow, jobStorage.getSize());
                 
-                // Use the new optimized function with all advanced algorithms
+                // Use Boolean Search (Inverted Index) + Selection Sort
                 jobStorage.findBestMatchesForJobs(resumeStorage, maxJobsToShow);
                 break;
             }
@@ -266,3 +266,4 @@ int main() {
 
     return 0;
 }
+
