@@ -120,7 +120,6 @@ struct Job : public DataItem {
     string getSkills() const override { return skills; }
     void display() const override;
     void parseFromCSV(const string& csvLine);
-    void parseFromDescription(const string& desc);
     string filterTechnicalSkills(const string& rawSkills);
 };
 
@@ -141,7 +140,6 @@ struct Resume : public DataItem {
     string getSkills() const override { return skills; }
     void display() const override;
     void parseFromCSV(const string& csvLine);
-    void parseFromDescription(const string& desc);
     string filterTechnicalSkills(const string& rawSkills);
 };
 
@@ -174,11 +172,9 @@ public:
 
     // Core Functions
     bool insert(const T& item);        // insert data item
-    bool remove(int index);            // remove at index
 
     // Getters
     int getSize() const { return size; }
-    int getCapacity() const { return capacity; }
     T getItem(int index) const;
     
     // File operations
@@ -306,7 +302,7 @@ void Job::parseFromCSV(const string& csvLine) {
         } else if (c == ',' && !inQuotes) {
             fields.push_back(currentField);
             currentField = "";
-        } else {
+    } else {
             currentField += c;
         }
     }
@@ -331,9 +327,9 @@ void Job::parseFromCSV(const string& csvLine) {
         // Clean up skills (remove quotes if present)
         if (skills.front() == '"' && skills.back() == '"') {
             skills = skills.substr(1, skills.length() - 2);
-        }
-        
-        // Set default values for other fields
+    }
+    
+    // Set default values for other fields
         description = "Job: " + title + " requiring " + skills;
         company = "Company Not Specified";
         location = "Location Not Specified";
@@ -344,47 +340,12 @@ void Job::parseFromCSV(const string& csvLine) {
         title = "Unknown Position";
         skills = "Not specified";
         description = csvLine;
-        company = "Company Not Specified";
-        location = "Location Not Specified";
-        experience_level = "Not Specified";
-    }
-}
-
-// Keep the old method for backward compatibility
-void Job::parseFromDescription(const string& desc) {
-    description = desc;
-    
-    // Extract title (first part before "needed")
-    size_t neededPos = desc.find("needed");
-    if (neededPos != string::npos) {
-        title = desc.substr(0, neededPos);
-        // Clean up title
-        title.erase(0, title.find_first_not_of(" \t"));
-        title.erase(title.find_last_not_of(" \t") + 1);
-    } else {
-        title = "Unknown Position";
-    }
-    
-    // Extract skills (text after "experience in" and before the random text)
-    size_t expPos = desc.find("experience in");
-    if (expPos != string::npos) {
-        size_t skillsStart = expPos + 13; // "experience in" length
-        size_t skillsEnd = desc.find(".", skillsStart);
-        if (skillsEnd == string::npos) skillsEnd = desc.length();
-        
-        string rawSkills = desc.substr(skillsStart, skillsEnd - skillsStart);
-        
-        // Clean up and filter skills
-        skills = filterTechnicalSkills(rawSkills);
-    } else {
-        skills = "Not specified";
-    }
-    
-    // Set default values for other fields
     company = "Company Not Specified";
     location = "Location Not Specified";
     experience_level = "Not Specified";
+    }
 }
+
 
 // Helper function to filter out noise words and keep only technical skills
 string Job::filterTechnicalSkills(const string& rawSkills) {
@@ -483,7 +444,7 @@ void Resume::parseFromCSV(const string& csvLine) {
         } else if (c == ',' && !inQuotes) {
             fields.push_back(currentField);
             currentField = "";
-        } else {
+    } else {
             currentField += c;
         }
     }
@@ -502,9 +463,9 @@ void Resume::parseFromCSV(const string& csvLine) {
         // Clean up skills (remove quotes if present)
         if (skills.front() == '"' && skills.back() == '"') {
             skills = skills.substr(1, skills.length() - 2);
-        }
-        
-        // Set default values for other fields
+    }
+    
+    // Set default values for other fields
         summary = "Professional with skills in " + skills;
         name = "Professional";
         experience = "Experienced";
@@ -515,38 +476,13 @@ void Resume::parseFromCSV(const string& csvLine) {
         id = -1;
         skills = "Not specified";
         summary = csvLine;
-        name = "Professional";
-        experience = "Experienced";
-        education = "Not Specified";
-        contact = "Not Provided";
-    }
-}
-
-// Keep the old method for backward compatibility
-void Resume::parseFromDescription(const string& desc) {
-    summary = desc;
-    
-    // Extract skills (text after "skilled in" and before the random text)
-    size_t skilledPos = desc.find("skilled in");
-    if (skilledPos != string::npos) {
-        size_t skillsStart = skilledPos + 10; // "skilled in" length
-        size_t skillsEnd = desc.find(".", skillsStart);
-        if (skillsEnd == string::npos) skillsEnd = desc.length();
-        
-        string rawSkills = desc.substr(skillsStart, skillsEnd - skillsStart);
-        
-        // Clean up and filter skills
-        skills = filterTechnicalSkills(rawSkills);
-    } else {
-        skills = "Not specified";
-    }
-    
-    // Set default values for other fields
     name = "Professional";
     experience = "Experienced";
     education = "Not Specified";
     contact = "Not Provided";
+    }
 }
+
 
 // Helper function to filter out noise words and keep only technical skills
 string Resume::filterTechnicalSkills(const string& rawSkills) {
@@ -683,17 +619,6 @@ bool Array<T>::insert(const T& item) {
     return true;
 }
 
-// Remove item at index
-template<typename T>
-bool Array<T>::remove(int index) {
-    if (index < 0 || index >= size) return false;
-
-    for (int i = index; i < size - 1; i++) {
-        dataArray[i] = dataArray[i + 1];
-    }
-    size--;
-    return true;
-}
 
 // (search removed as unused)
 
