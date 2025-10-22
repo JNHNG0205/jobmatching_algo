@@ -25,14 +25,24 @@ bool runDataCleaning() {
     cout << "\nStarting data cleaning process..." << endl;
     
     // Check if data_cleaning executable exists
-    ifstream check("data_cleaning");
+    ifstream check("./data_cleaning");
     if (!check.good()) {
         check.close();
         // Try with .exe extension (for Windows)
-        check.open("data_cleaning.exe");
+        check.open("./data_cleaning.exe");
         if (!check.good()) {
             cerr << "Error: data_cleaning executable not found!" << endl;
             cerr << "Please ensure data_cleaning is compiled and in the current directory." << endl;
+            return false;
+        }
+        check.close();
+        cout << "Running data cleaning..." << endl;
+        int result = system("./data_cleaning.exe");
+        if (result == 0) {
+            cout << "Data cleaning completed successfully!" << endl;
+            return true;
+        } else {
+            cerr << "Data cleaning failed with exit code: " << result << endl;
             return false;
         }
     }
@@ -40,7 +50,7 @@ bool runDataCleaning() {
     
     // Run the data cleaning process
     cout << "Running data cleaning..." << endl;
-    int result = system("data_cleaning");
+    int result = system("./data_cleaning");
     if (result == 0) {
         cout << "Data cleaning completed successfully!" << endl;
         return true;
