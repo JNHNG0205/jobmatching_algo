@@ -700,6 +700,9 @@ void Array<T>::selectionSort(Match* matches, int matchCount) const {
 // Display multiple matches using BOOLEAN SEARCH (Inverted Index) + SELECTION SORT
 template<typename T>
 void Array<T>::displayMatches(const string& keyword, int maxResults) const {
+    // Start timing
+    auto startTime = chrono::high_resolution_clock::now();
+    
     if (!indexBuilt) {
         cout << "Building inverted index for Boolean Search..." << endl;
         const_cast<Array<T>*>(this)->buildIndex();
@@ -779,13 +782,25 @@ void Array<T>::displayMatches(const string& keyword, int maxResults) const {
     // Use SELECTION SORT to sort matches
     selectionSort(matches, matchCount);
     
+    // End timing
+    auto endTime = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
+    
     int resultsToShow = min(maxResults, matchCount);
     cout << "\n=== Top " << resultsToShow << " Matches for '" << keyword << "' ===" << endl;
+    
     for (int i = 0; i < resultsToShow; i++) {
         cout << "\nMatch " << (i + 1) << " (Score: " << matches[i].score << "):" << endl;
         cout << "ID: " << matches[i].index << endl;
         dataArray[matches[i].index].display();
     }
+    
+    // Display statistics at the end
+    cout << "\n==========================================";
+    cout << "\nCandidates Found: " << candidateIds.size() << " (from " << size << " total items)";
+    cout << "\nMatches with Scores: " << matchCount;
+    cout << "\nTime Taken: " << duration.count() << " ms (" << fixed << setprecision(3) << (duration.count() / 1000.0) << " seconds)";
+    cout << "\n==========================================\n" << endl;
     
     delete[] matches;
 }
@@ -1081,6 +1096,9 @@ void Array<Job>::findBestMatchesForJobs(const Array<Resume>& resumeStorage, int 
 // Search jobs by title using BOOLEAN SEARCH
 template<>
 void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResults) const {
+    // Start timing
+    auto startTime = chrono::high_resolution_clock::now();
+    
     if (!indexBuilt) {
         cout << "Building inverted index for Boolean Search..." << endl;
         const_cast<Array<Job>*>(this)->buildIndex();
@@ -1140,6 +1158,10 @@ void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResult
     // Use SELECTION SORT
     selectionSort(matches, matchCount);
     
+    // End timing
+    auto endTime = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
+    
     int resultsToShow = min(maxResults, matchCount);
     cout << "\n=== Top " << resultsToShow << " Job Title Matches for '" << titleKeyword << "' ===" << endl;
     
@@ -1147,6 +1169,13 @@ void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResult
         cout << "\nMatch " << (i + 1) << " (Score: " << matches[i].score << "):" << endl;
         dataArray[matches[i].index].display();
     }
+    
+    // Display statistics at the end
+    cout << "\n==========================================";
+    cout << "\nJobs Processed: " << candidateIds.size() << " candidates (from " << size << " total jobs)";
+    cout << "\nJobs with Scores: " << matchCount;
+    cout << "\nTime Taken: " << duration.count() << " ms (" << fixed << setprecision(3) << (duration.count() / 1000.0) << " seconds)";
+    cout << "\n==========================================\n" << endl;
     
     delete[] matches;
 }

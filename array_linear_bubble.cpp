@@ -654,6 +654,9 @@ void Array<T>::bubbleSort(Match* matches, int matchCount) const {
 // Display multiple matches with scores using LINEAR SEARCH 
 template<typename T>
 void Array<T>::displayMatches(const string& keyword, int maxResults) const {
+    // Start timing
+    auto startTime = chrono::high_resolution_clock::now();
+    
     cout << "\nUsing: Linear Search + Bubble Sort" << endl;
     
     // Create array to store scores and indices
@@ -722,14 +725,26 @@ void Array<T>::displayMatches(const string& keyword, int maxResults) const {
     // Use BUBBLE SORT to sort matches
     bubbleSort(matches, matchCount);
     
+    // End timing
+    auto endTime = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
+    
     // Display top matches
     int resultsToShow = min(maxResults, matchCount);
     cout << "\n=== Top " << resultsToShow << " Matches for '" << keyword << "' ===" << endl;
+    
     for (int i = 0; i < resultsToShow; i++) {
         cout << "\nMatch " << (i + 1) << " (Score: " << matches[i].score << "):" << endl;
         cout << "ID: " << matches[i].index << endl;
         dataArray[matches[i].index].display();
     }
+    
+    // Display statistics at the end
+    cout << "\n==========================================";
+    cout << "\nItems Processed: " << size << " (Linear search through all)";
+    cout << "\nMatches with Scores: " << matchCount;
+    cout << "\nTime Taken: " << duration.count() << " ms (" << fixed << setprecision(3) << (duration.count() / 1000.0) << " seconds)";
+    cout << "\n==========================================\n" << endl;
     
     delete[] matches;
 }
@@ -856,6 +871,9 @@ void Array<Job>::findBestMatchesForJobs(const Array<Resume>& resumeStorage, int 
 // Search jobs by title using LINEAR SEARCH
 template<>
 void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResults) const {
+    // Start timing
+    auto startTime = chrono::high_resolution_clock::now();
+    
     cout << "\nUsing: Linear Search for Title Matching" << endl;
     
     Match* matches = new Match[size];
@@ -904,6 +922,10 @@ void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResult
     // Use BUBBLE SORT
     bubbleSort(matches, matchCount);
     
+    // End timing
+    auto endTime = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime);
+    
     int resultsToShow = min(maxResults, matchCount);
     cout << "\n=== Top " << resultsToShow << " Job Title Matches for '" << titleKeyword << "' ===" << endl;
     
@@ -911,6 +933,13 @@ void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResult
         cout << "\nMatch " << (i + 1) << " (Score: " << matches[i].score << "):" << endl;
         dataArray[matches[i].index].display();
     }
+    
+    // Display statistics at the end
+    cout << "\n==========================================";
+    cout << "\nJobs Processed: " << size << " (Linear search through all)";
+    cout << "\nJobs with Scores: " << matchCount;
+    cout << "\nTime Taken: " << duration.count() << " ms (" << fixed << setprecision(3) << (duration.count() / 1000.0) << " seconds)";
+    cout << "\n==========================================\n" << endl;
     
     delete[] matches;
 }

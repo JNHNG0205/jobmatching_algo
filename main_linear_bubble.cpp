@@ -99,7 +99,7 @@ int main() {
         cout << "1. Search Jobs by Job Title\n";
         cout << "2. Search Jobs by Skills\n";
         cout << "3. Search Resumes by Skills\n";
-        cout << "4. Show Best Matches for Each Job\n";
+        cout << "4. Find ALL Matches for Each Job\n";
         cout << "5. Clean Data (Regenerate Cleaned CSVs)\n";
         cout << "6. Exit\n";
         cout << "-----------------------------------------\n";
