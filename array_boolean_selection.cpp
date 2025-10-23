@@ -797,7 +797,7 @@ void Array<T>::displayMatches(const string& keyword, int maxResults) const {
     
     // Display statistics at the end
     cout << "\n==========================================";
-    cout << "\nCandidates Found: " << candidateIds.size() << " (from " << size << " total items)";
+    cout << "\nJobs/Resumes Found: " << candidateIds.size() << " (from " << size << " total items)";
     cout << "\nMatches with Scores: " << matchCount;
     cout << "\nTime Taken: " << duration.count() << " ms (" << fixed << setprecision(3) << (duration.count() / 1000.0) << " seconds)";
     cout << "\n==========================================\n" << endl;
@@ -1172,7 +1172,7 @@ void Array<Job>::displayMatchesByTitle(const string& titleKeyword, int maxResult
     
     // Display statistics at the end
     cout << "\n==========================================";
-    cout << "\nJobs Processed: " << candidateIds.size() << " candidates (from " << size << " total jobs)";
+    cout << "\nJobs Processed: " << candidateIds.size() << " jobs (from " << size << " total jobs)";
     cout << "\nJobs with Scores: " << matchCount;
     cout << "\nTime Taken: " << duration.count() << " ms (" << fixed << setprecision(3) << (duration.count() / 1000.0) << " seconds)";
     cout << "\n==========================================\n" << endl;
